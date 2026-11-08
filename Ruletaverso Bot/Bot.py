@@ -14,6 +14,7 @@ load_dotenv()
 TOKEN = os.getenv("DISCORD_TOKEN")
 CANAL_ANUNCIOS_ID = 1562600318242529372
 CANAL_REPORTES_ID = 1565371246349123625
+CANAL_SUGERENCIAS_ID = 1569102402588516505
 
 # 🛡️ Configuración de Roles para Comandos de Staff
 ROLES_STAFF_IDS = [1344152033581596733, 1160777915504541697]
@@ -459,8 +460,50 @@ class FormularioReporteProblema(discord.ui.Modal, title="🛟 Notificar un Probl
             if not interaction.response.is_done():
                 await interaction.response.send_message(f"⚠️ Ocurrió un error al enviar el reporte: `{e}`", ephemeral=True)
 
+class FormularioSugerencia(discord.ui.Modal, title="💡 Enviar una Sugerencia"):
+    def __init__(self):
+        super().__init__()
+
+        self.sugerencia_texto = discord.ui.TextInput(
+            label="Detalle de tu Sugerencia (Máx. 2000 car.)",
+            placeholder="¿Qué te gustaría añadir o cambiar en el servidor?",
+            style=discord.TextStyle.paragraph,
+            max_length=2000,
+            required=True,
+        )
+        self.add_item(self.sugerencia_texto)
+
+    async def on_submit(self, interaction: discord.Interaction):
+        try:
+            canal_sugerencias = interaction.client.get_channel(CANAL_SUGERENCIAS_ID)
+            if not canal_sugerencias:
+                await interaction.response.send_message("❌ No se encontró el canal de sugerencias configurado.", ephemeral=True)
+                return
+
+            embed = discord.Embed(
+                title="💡 Nueva Sugerencia Recibida",
+                description=self.sugerencia_texto.value.strip(),
+                color=discord.Color.gold(),
+                timestamp=datetime.now()
+            )
+            embed.set_author(name=str(interaction.user), icon_url=interaction.user.display_avatar.url)
+            embed.add_field(name="👤 Usuario", value=interaction.user.mention, inline=True)
+            embed.add_field(name="🆔 ID de Usuario", value=str(interaction.user.id), inline=True)
+            embed.set_footer(text="Sistema de Sugerencias Ruletaverso")
+
+            # Enviamos el mensaje al canal del staff y añadimos reacciones automáticas para votación
+            mensaje_enviado = await canal_sugerencias.send(embed=embed)
+            await mensaje_enviado.add_reaction("👍")
+            await mensaje_enviado.add_reaction("👎")
+
+            await interaction.response.send_message("✅ ¡Tu sugerencia ha sido enviada con éxito al canal del staff para su revisión!", ephemeral=True)
+        except Exception as e:
+            print(f"❌ Error al enviar sugerencia: {e}")
+            if not interaction.response.is_done():
+                await interaction.response.send_message(f"⚠️ Ocurrió un error al enviar tu sugerencia: `{e}`", ephemeral=True)
+
 # ---------------------------------------------------------
-# Selección de Raza (Limpieza solicitada: Solo Tier y Nombre)
+# Selección de Raza
 # ---------------------------------------------------------
 class RazaSelect(discord.ui.Select):
     def __init__(self, slot_id: int):
@@ -478,7 +521,6 @@ class RazaSelect(discord.ui.Select):
         super().__init__(placeholder="Elige la raza de tu personaje...", min_values=1, max_values=1, options=options)
 
     async def callback(self, interaction: discord.Interaction):
-        # Limpiamos el texto seleccionado para extraer únicamente el nombre de la raza (ej: "Tier F - Humano" -> "Humano")
         raza_seleccionada = self.values[0].split(" - ")[1]
         await interaction.response.send_modal(FormularioPersonajeSlot(slot_id=self.slot_id, raza=raza_seleccionada))
 
@@ -612,7 +654,7 @@ class FichaSelect(discord.ui.Select):
         self.slot_id = slot_id
 
         options = [
-            discord.SelectOption(label="· ⍛ Soporte · sim", description="Abrir opciones de soporte", emoji="🛟"),
+            discord.SelectOption(label="· ⍛ Soporte · sim", description="Abrir opciones de soporte y sugerencias", emoji="🛟"),
             discord.SelectOption(label="· ⍛ Ficha · sim", description="Ver la ficha de tu personaje y estadísticas", emoji="📊"),
             discord.SelectOption(label="· ⍛ Bibliografía · sim", description="Gestionar tu historia (Páginas 1 a 4)", emoji="📖"),
             discord.SelectOption(label="· ⍛ Aptitudes · sim", description="Ver poderes, habilidades y rasgos", emoji="⚔️"),
@@ -651,8 +693,8 @@ class FichaSelect(discord.ui.Select):
         view_a_usar = self.view
 
         if "Soporte" in eleccion:
-            embed.title = "🛟 Opciones de Soporte"
-            embed.description = "Si experimentas problemas con tu personaje, economía o comandos, puedes notificarlo directamente al equipo de administración mediante el botón de abajo."
+            embed.title = "🛟 Opciones de Soporte y Sugerencias"
+            embed.description = "Si experimentas problemas con tu personaje o tienes ideas para mejorar el servidor, puedes utilizar los botones de abajo para notificarlo al staff."
             embed.add_field(name="Canal de Ayuda", value="Usa `rv!ayuda` para ver la lista completa de comandos.", inline=False)
             view_a_usar = SoporteView(self.owner_id, self.target_user, self.slot_id)
         elif "Ficha" in eleccion:
@@ -727,6 +769,10 @@ class SoporteView(discord.ui.View):
     @discord.ui.button(label="⚠️ Notificar un Problema", style=discord.ButtonStyle.danger, row=1)
     async def notificar_problema_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
         await interaction.response.send_modal(FormularioReporteProblema())
+
+    @discord.ui.button(label="💡 Enviar una Sugerencia", style=discord.ButtonStyle.success, row=1)
+    async def enviar_sugerencia_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await interaction.response.send_modal(FormularioSugerencia())
 
 # Vista Interactiva para las 4 Páginas de Bibliografía
 class BibliografiaView(discord.ui.View):
