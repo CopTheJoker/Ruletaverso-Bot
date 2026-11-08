@@ -1,0 +1,12 @@
+# Entornos virtuales y dependencias
+__pycache__/
+venv/
+.env
+
+# Base de datos local
+economia_rp.db
+*.db
+
+# Archivos del sistema operativo
+.DS_Store
+Thumbs.db
